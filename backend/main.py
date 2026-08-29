@@ -1,10 +1,12 @@
 from fastapi import FastAPI,UploadFile,File,HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from tempfile import TemporaryFile
+from generate import generate_answer
 from extract import extract_text
-from embeddings import store_chunks,embed_chunks
+from embeddings import store_chunks,embed_chunks,retrieve_chunks
 import os
 from chunking import chunk_text
+from pydantic import BaseModel
+
 
 
 
@@ -12,6 +14,13 @@ app = FastAPI()
 
 UPLOAD_DIR = "./uploads"
 os.makedirs(UPLOAD_DIR,exist_ok=True)
+
+app.add_middleware(
+  CORSMiddleware,
+  allow_origins=["http://localhost:5173"],
+  allow_methods=["*"],
+  allow_headers=["*"],
+)
 
 
 @app.post("/upload")
@@ -28,3 +37,13 @@ async def upload_pdf(file:UploadFile = File(...)):
   store_chunks(chunks=chunks,embeddings=embeddings,doc_id=file.filename)
   return {"message": "Upload successful", "chunks_created": len(chunks)}
   
+
+class AskRequest(BaseModel):
+  question: str
+
+@app.post("/ask")
+def ask_question(request: AskRequest):
+    question = request.question
+    retrieved = retrieve_chunks(question=question,n_results=2)
+    answer = generate_answer(question=question,chunks=retrieved)
+    return {"answer":answer}
