@@ -1,3 +1,7 @@
-test.py
+__pycache__/
+*.pyc
+.venv/
 .env
-__pycache__
+uploads/
+chroma_db/
+test.py
