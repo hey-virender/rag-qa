@@ -1,8 +1,8 @@
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from pinecone import Pinecone,ServerlessSpec
 from config import settings
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
+model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 pc = Pinecone(api_key=settings.pinecone_api_key.get_secret_value())
 
@@ -20,7 +20,7 @@ index = pc.Index(INDEX_NAME)
 
 
 def embed_chunks(chunks:list[str])-> list[list[float]]:
-  return model.encode(chunks).tolist()
+  return [vec.tolist() for vec in model.embed(chunks)]
 
 def store_chunks(chunks:list[str],embeddings:list[list[float]],doc_id:str):
   vectors = []
@@ -32,8 +32,8 @@ def store_chunks(chunks:list[str],embeddings:list[list[float]],doc_id:str):
 
 
 def retrieve_chunks(question:str,n_results:int = 3)->list[str]:
-  question_embeddings = model.encode([question]).tolist()[0]
-  results = index.query(vector=question_embeddings,
+  question_embedding = [vec.tolist() for vec in model.embed([question])][0]
+  results = index.query(vector=question_embedding,
                         top_k=n_results,
                         include_metadata=True)
   chunks = []
