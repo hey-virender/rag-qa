@@ -1,26 +1,43 @@
 from sentence_transformers import SentenceTransformer
-import chromadb
+from pinecone import Pinecone,ServerlessSpec
+from config import settings
 
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
-client = chromadb.PersistentClient(path="./chroma_db")
-collection = client.get_or_create_collection("documents")
+pc = Pinecone(api_key=settings.pinecone_api_key.get_secret_value())
+
+INDEX_NAME = "rag-qa"
+
+if INDEX_NAME not in [idx.name for idx in pc.list_indexes()]:
+  pc.create_index(
+    name=INDEX_NAME,
+    dimension=384,
+    metric="cosine",
+    spec = ServerlessSpec(cloud="aws", region="us-east-1")
+  )
+
+index = pc.Index(INDEX_NAME)
+
 
 def embed_chunks(chunks:list[str])-> list[list[float]]:
   return model.encode(chunks).tolist()
 
 def store_chunks(chunks:list[str],embeddings:list[list[float]],doc_id:str):
-  ids = [f"{doc_id}_chunk_{i}" for i in range (len(chunks))]
-  collection.add(ids=ids,
-                 embeddings=embeddings, #type: ignore[arg-type]
-                 documents=chunks)
+  vectors = []
+  for i, (chunk, embedding) in enumerate(zip(chunks,embeddings)):
+      chunk_id = f"{doc_id}_chunk_{i}"
+      metadata = {"text":chunk}
+      vectors.append((chunk_id, embedding,metadata))
+  index.upsert(vectors=vectors)
 
 
 def retrieve_chunks(question:str,n_results:int = 3)->list[str]:
   question_embeddings = model.encode([question]).tolist()[0]
-  results = collection.query(query_embeddings=[question_embeddings],
-    n_results=n_results)
-  documents = results.get("documents")
-  if documents is None:
-    return []
-  return documents[0]
+  results = index.query(vector=question_embeddings,
+                        top_k=n_results,
+                        include_metadata=True)
+  chunks = []
+  for match in results.matches:
+    if match.metadata is not None:
+      chunks.append(match.metadata["text"])
+  return chunks

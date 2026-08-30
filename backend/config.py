@@ -6,5 +6,6 @@ class Settings(BaseSettings):
   model_config = SettingsConfigDict(env_file=".env")
   groq_api_key: SecretStr
   groq_model: str = "openai/gpt-oss-120b"
+  pinecone_api_key: SecretStr
 
 settings = Settings() # type: ignore[call-arg]
